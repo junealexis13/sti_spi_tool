@@ -140,19 +140,24 @@ def _upright_label(text, font, fill):
     return plate.rotate(90, expand=True)
 
 
-def render_bivariate_png(tif_bytes, max_side=2400):
-    rgba, _, _ = _colorized_bivariate(tif_bytes)
-    image = _fit_image(Image.fromarray(rgba, mode="RGBA"), max_side)
-    return _png_bytes(image), max(rgba.shape[:2]) > max_side
+def render_bivariate_png(tif_bytes, gdf=None, max_side=None):
+    """Classed SPI/STI picture. A coarse raster is enlarged for viewing; the GeoTIFF is unchanged."""
+    rgba, _, crs = _colorized_bivariate(tif_bytes)
+    native = max(rgba.shape[:2])
+    long_side = _view_long_side(gdf, crs, native, max_side)
+    image = _fit_long_side(Image.fromarray(rgba, mode="RGBA"), long_side)
+    shown = max(image.size)
+    return _png_bytes(image), native > shown + 1, shown > native + 1
 
 
-def render_labeled_png(tif_bytes, gdf, name_field, max_side=1800):
+def render_labeled_png(tif_bytes, gdf, name_field, max_side=None):
     """Bivariate map with the shapefile outline and a small name from ``name_field`` on each polygon."""
     if name_field not in getattr(gdf, "columns", ()):
         raise ValueError(f"The shapefile has no field named {name_field}.")
     rgba, transform, crs = _colorized_bivariate(tif_bytes)
     work = gdf.to_crs(crs) if crs is not None else gdf
-    fitted = _fit_image(Image.fromarray(rgba, mode="RGBA"), max_side)
+    long_side = _view_long_side(work, crs, max(rgba.shape[:2]), max_side)
+    fitted = _fit_long_side(Image.fromarray(rgba, mode="RGBA"), long_side)
     sx = fitted.width / rgba.shape[1]
     sy = fitted.height / rgba.shape[0]
     inv = ~transform
@@ -165,7 +170,7 @@ def render_labeled_png(tif_bytes, gdf, name_field, max_side=1800):
     plate = Image.new("RGBA", (fitted.width + margin * 2, fitted.height + margin * 2), (255, 255, 255, 255))
     plate.paste(fitted, (margin, margin), fitted)
     draw = ImageDraw.Draw(plate)
-    line_w = max(2, round(short_side / 420))
+    line_w = max(3, round(short_side / 520))
     left, bottom, right, top = _raster_bounds(rgba.shape[0], rgba.shape[1], transform)
 
     placed = []
@@ -230,14 +235,46 @@ def _colorized_bivariate(tif_bytes):
 
 
 def _fit_image(image, max_side):
-    long_side = max(image.size)
-    if long_side <= max_side:
+    return _fit_long_side(image, min(max(image.size), max_side))
+
+
+def _fit_long_side(image, long_side):
+    current = max(image.size)
+    if current <= 0 or abs(current - long_side) < 1:
         return image
-    scale = max_side / long_side
+    scale = long_side / current
     return image.resize(
-        (max(1, int(image.width * scale)), max(1, int(image.height * scale))),
+        (max(1, int(round(image.width * scale))), max(1, int(round(image.height * scale)))),
         Image.Resampling.NEAREST,
     )
+
+
+def _view_long_side(gdf, crs, native_long, max_side=None):
+    """Viewing size for both pictures. Coarse cells are enlarged; a fine raster is only reduced to the cap."""
+    cap = 6400
+    if gdf is None:
+        target = min(native_long, 2400)
+    else:
+        work = gdf.to_crs(crs) if crs is not None and getattr(gdf, "crs", None) is not None else gdf
+        width_m, height_m = _ground_size_m(work)
+        long_km = max(width_m, height_m) / 1000
+        # About 36 px per km when the download is still on coarse cells.
+        view = int(max(2800, min(cap, round(max(long_km, 0) * 36))))
+        target = view if native_long < view else min(native_long, cap)
+    if max_side:
+        target = min(target, int(max_side))
+    return max(1, target)
+
+
+def _ground_size_m(gdf):
+    minx, miny, maxx, maxy = gdf.total_bounds
+    crs = getattr(gdf, "crs", None)
+    if crs is not None and getattr(crs, "is_geographic", False):
+        lat = math.radians((miny + maxy) / 2.0)
+        width = abs(maxx - minx) * 111_320 * max(math.cos(lat), 0.2)
+        height = abs(maxy - miny) * 110_540
+        return width, height
+    return abs(maxx - minx), abs(maxy - miny)
 
 
 def _png_bytes(image):
@@ -256,8 +293,8 @@ def _feature_label(value):
 
 
 def _map_font_size(short_side, count):
-    size = short_side / (36 + 2.2 * math.sqrt(max(count, 1)))
-    return int(max(13, min(28, round(size))))
+    size = short_side / (42 + 2.2 * math.sqrt(max(count, 1)))
+    return int(max(14, min(short_side / 48, round(size))))
 
 
 def _map_margin(names, font, stroke, font_size, short_side):
@@ -268,7 +305,7 @@ def _map_margin(names, font, stroke, font_size, short_side):
             continue
         left, _, right, _ = probe.textbbox((0, 0), name, font=font, stroke_width=stroke)
         widest = max(widest, right - left)
-    room = max(18, short_side // 10)
+    room = min(140, max(18, short_side // 16))
     return max(10, font_size // 2 + 4, min(widest // 2 + 6, room))
 
 

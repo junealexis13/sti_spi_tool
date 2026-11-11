@@ -112,7 +112,7 @@ def render():
                     used_cell = int(smooth_cell) if smoothed else None
                 status.write("Counting classes inside each municipality.")
                 tables = zone_tables(tif, gdf, name_field, st.session_state.get("layer") or filename)
-                png, scaled = render_bivariate_png(tif)
+                png, scaled, image_upscaled = render_bivariate_png(tif, gdf)
                 status.write("Drawing the boundary and municipality names.")
                 labeled = render_labeled_png(tif, gdf, name_field)
                 status.update(label="Files are ready", state="complete")
@@ -122,6 +122,7 @@ def render():
                 "png": png,
                 "labeled_png": labeled,
                 "scaled": scaled,
+                "image_upscaled": image_upscaled,
                 "tables": tables,
                 "meta": meta,
                 "scale": used_scale,
@@ -173,6 +174,8 @@ def _show_result(result):
     caption = "Bivariate SPI-3 and STI-3"
     if result["scaled"]:
         caption += ". The picture is reduced to fit the page. The GeoTIFF is full resolution."
+    elif result.get("image_upscaled"):
+        caption += ". The picture is enlarged from the raster cells. The GeoTIFF keeps the downloaded cell size."
     map_col, legend_col = st.columns([2, 1], vertical_alignment="top")
     with map_col:
         st.image(result["png"], caption=caption)
