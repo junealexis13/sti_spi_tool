@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.streamlit/secrets.toml
+credentials/
+secrets/
+service-account*.json
+*credentials*.json
+outputs/
+uploads/
+.DS_Store

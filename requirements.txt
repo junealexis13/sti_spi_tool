@@ -1,0 +1,11 @@
+streamlit
+earthengine-api
+geopandas
+rasterio
+numpy
+pandas
+altair
+requests
+Pillow
+folium
+streamlit-folium
