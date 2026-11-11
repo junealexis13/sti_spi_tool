@@ -88,7 +88,7 @@ The bivariate map is masked to the uploaded boundary.
 
 <img src="docs/bivariate-map.png" alt="Bivariate SPI and STI map for the uploaded municipalities, mostly near normal with a cooler patch along the south." width="780">
 
-The 49-color legend sits under the map. GeoTIFF, PNG, and the full zip download from the same place.
+The 49-color legend sits beside the map. **Download legend** saves that key as a PNG. GeoTIFF, map PNG, and the full zip download from the row below.
 
 <img src="docs/legend-and-downloads.png" alt="Color legend for temperature and rainfall classes, with Download GeoTIFF, Download PNG, and Download all files." width="780">
 
